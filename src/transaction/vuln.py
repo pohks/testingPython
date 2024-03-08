@@ -1,36 +1,51 @@
 import requests
-import sqlite3
+import pymysql
 
-# Função para consultar um site externo (vulnerabilidade SSRF)
-def consultar_site(url):
-    response = requests.get(url)
-    if response.status_code == 200:
+# Vulnerable library - pymysql (vulnerable to SQL injection if not used properly)
+# Assuming there's a local MySQL database running with a table named 'users' having 'username' and 'password' columns
+
+def fetch_data_from_database(username):
+    # Establishing connection to the local MySQL database
+    connection = pymysql.connect(host='localhost',
+                                 user='root',
+                                 password='password',
+                                 database='test_db',
+                                 charset='utf8mb4',
+                                 cursorclass=pymysql.cursors.DictCursor)
+    
+    try:
+        with connection.cursor() as cursor:
+            # Vulnerability: SQL Injection
+            sql = f"SELECT * FROM users WHERE username = '{username}'"
+            cursor.execute(sql)
+            result = cursor.fetchone()
+            return result
+    finally:
+        connection.close()
+
+def fetch_url_content(url):
+    try:
+        # Vulnerability: SSRF
+        response = requests.get(url)
         return response.text
-    else:
-        return "Falha ao consultar o site"
-
-# Função para realizar uma consulta SQL (vulnerabilidade SQL Injection)
-def consultar_usuarios(nome):
-    conn = sqlite3.connect('banco_de_dados.db')
-    cursor = conn.cursor()
-    query = "SELECT * FROM usuarios WHERE nome = '" + nome + "'"
-    cursor.execute(query)
-    resultados = cursor.fetchall()
-    conn.close()
-    return resultados
+    except Exception as e:
+        return str(e)
 
 def main():
-    # Vulnerabilidade SSRF - Consulta a uma URL interna
-    url_interna = "http://localhost:8080/rota_interna"
-    resposta_ssrf = consultar_site(url_interna)
-    print("Resposta da consulta SSRF:")
-    print(resposta_ssrf)
+    # Example usage with user input
+    username = input("Enter username: ")
 
-    # Vulnerabilidade SQL Injection - Consulta de usuários
-    nome_usuario = input("Digite o nome do usuário para consultar: ")
-    resultados_sqli = consultar_usuarios(nome_usuario)
-    print("Resultados da consulta SQL Injection:")
-    print(resultados_sqli)
+    # Fetching user data from the database
+    user_data = fetch_data_from_database(username)
+    if user_data:
+        print("User data:", user_data)
+    else:
+        print("User not found.")
+
+    # Example of SSRF vulnerability
+    internal_url = 'http://localhost:8080/internal_data'
+    internal_data = fetch_url_content(internal_url)
+    print("Internal data:", internal_data)
 
 if __name__ == "__main__":
     main()
